@@ -1,9 +1,8 @@
 // client/lib/store.ts
 import { create } from 'zustand';
 import { ChatRoom, Message } from './api';
-import { useApi } from '@/hooks/use-api'; // We need this to make API calls from our actions
+import { useApi } from '@/hooks/use-api';
 
-// Define the shape of our application's state
 export interface AppState {
   chatRooms: ChatRoom[];
   activeChatRoomId: string | null;
@@ -11,20 +10,17 @@ export interface AppState {
   uploadStatus: 'idle' | 'uploading' | 'processing' | 'failed' | 'success';
   isLoadingChatRooms: boolean;
   isLoadingMessages: boolean;
-  isSendingMessage: boolean; // To track when the AI is replying
+  isSendingMessage: boolean;
 
-  // Define the actions (functions) that can modify the state
   actions: {
     fetchChatRooms: (api: ReturnType<typeof useApi>) => Promise<void>;
-    setActiveChatRoomId: (id: string | null, api: ReturnType<typeof useApi>) => void;
+    setActiveChatRoomId: (id: string | null, api: ReturnType<typeof useApi>) => Promise<void>;
     uploadAndTrackDocument: (file: File, api: ReturnType<typeof useApi>) => Promise<void>;
     postMessage: (chatRoomId: string, message: string, api: ReturnType<typeof useApi>) => Promise<void>;
   };
 }
 
-// Create the store
-const useAppStore = create<AppState>((set, get) => ({
-  // Initial state
+export const useAppStore = create<AppState>((set, get) => ({
   chatRooms: [],
   activeChatRoomId: null,
   messages: [],
@@ -33,9 +29,7 @@ const useAppStore = create<AppState>((set, get) => ({
   isLoadingMessages: false,
   isSendingMessage: false,
 
-  // Actions implementation
   actions: {
-    // Fetches all chat rooms
     fetchChatRooms: async (api) => {
       set({ isLoadingChatRooms: true });
       try {
@@ -47,10 +41,8 @@ const useAppStore = create<AppState>((set, get) => ({
       }
     },
 
-    // Sets the active chat and fetches its messages
     setActiveChatRoomId: async (id, api) => {
-      if (get().activeChatRoomId === id) return; // Don't re-fetch if already active
-      
+      if (get().activeChatRoomId === id) return;
       set({ activeChatRoomId: id, messages: [], isLoadingMessages: true });
       if (id) {
         try {
@@ -62,45 +54,92 @@ const useAppStore = create<AppState>((set, get) => ({
           set({ isLoadingMessages: false });
         }
       } else {
-        set({ isLoadingMessages: false }); // No messages to load if ID is null
+        set({ isLoadingMessages: false });
       }
     },
     
-    // Posts a new message and updates the state with the AI response
     postMessage: async (chatRoomId, message, api) => {
-       const userMessage: Message = { _id: `temp_user_${Date.now()}`, chatRoomId, role: 'user', content: message, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+       const userMessage: Message = { _id: `temp_${Date.now()}`, chatRoomId, role: 'user', content: message, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
        set((state) => ({ messages: [...state.messages, userMessage], isSendingMessage: true }));
-
        try {
          const aiResponse = await api.postMessage(chatRoomId, message);
-         // Replace temp message with real one and add AI response
-         set((state) => ({
-           messages: [...state.messages.filter(m => m._id !== userMessage._id), userMessage, aiResponse],
-         }));
+         set((state) => ({ messages: [...state.messages.filter(m => m._id !== userMessage._id), userMessage, aiResponse] }));
        } catch (error) {
          console.error("Failed to post message in store:", error);
-         const errorMessage: Message = { _id: `err_${Date.now()}`, chatRoomId, role: 'assistant', content: "Sorry, an error occurred. Please try again.", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
-         set((state) => ({ messages: [...state.messages.filter(m => m._id !== userMessage._id), userMessage, errorMessage] }));
        } finally {
          set({ isSendingMessage: false });
        }
     },
 
-    // Handles the file upload and tracking (to be implemented)
+    // --- REWRITTEN ACTION ---
     uploadAndTrackDocument: async (file, api) => {
-      // We will build this logic in the next step
-      console.log("Uploading file:", file.name);
+      set({ uploadStatus: 'uploading' });
+
+      const tempId = `temp_${Date.now()}`;
+      const placeholderRoom = {
+        _id: tempId,
+        title: file.name,
+        status: 'PROCESSING',
+      } as unknown as ChatRoom;
+
+      set(state => ({
+        chatRooms: [placeholderRoom, ...state.chatRooms],
+      }));
+
+      try {
+        const { documentId } = await api.uploadPdf(file);
+        if (!documentId) throw new Error("Upload failed, no document ID returned.");
+
+        set({ uploadStatus: 'processing' });
+
+        const pollStatus = async () => {
+          try {
+            const { status } = await api.getDocumentStatus(documentId);
+
+            if (status === 'COMPLETED') {
+              await get().actions.fetchChatRooms(api);
+              set({ uploadStatus: 'success' });
+              setTimeout(() => set({ uploadStatus: 'idle' }), 3000);
+            } else if (status === 'FAILED') {
+              set(state => ({
+                chatRooms: state.chatRooms.filter(room => room._id !== tempId),
+                uploadStatus: 'failed',
+              }));
+              setTimeout(() => set({ uploadStatus: 'idle' }), 3000);
+            } else {
+              setTimeout(pollStatus, 2000); // Poll again
+            }
+          } catch (pollError) {
+             console.error("Polling failed:", pollError);
+             set(state => ({
+                chatRooms: state.chatRooms.filter(room => room._id !== tempId),
+                uploadStatus: 'failed',
+              }));
+             setTimeout(() => set({ uploadStatus: 'idle' }), 3000);
+          }
+        };
+
+        setTimeout(pollStatus, 2000);
+
+      } catch (uploadError) {
+        console.error("Upload failed in store:", uploadError);
+        set(state => ({
+          chatRooms: state.chatRooms.filter(room => room._id !== tempId),
+          uploadStatus: 'failed',
+        }));
+        setTimeout(() => set({ uploadStatus: 'idle' }), 3000);
+      }
     },
   },
 }));
 
-// Export hooks for easy access to state and actions
+// --- EXPORT CUSTOM HOOKS (Unchanged) ---
 export const useChatRooms = () => useAppStore((state) => state.chatRooms);
 export const useActiveChatRoomId = () => useAppStore((state) => state.activeChatRoomId);
+// ... etc. (rest of the hooks are the same)
 export const useMessages = () => useAppStore((state) => state.messages);
+export const useUploadStatus = () => useAppStore((state) => state.uploadStatus);
 export const useIsLoadingChatRooms = () => useAppStore((state) => state.isLoadingChatRooms);
 export const useIsLoadingMessages = () => useAppStore((state) => state.isLoadingMessages);
 export const useIsSendingMessage = () => useAppStore((state) => state.isSendingMessage);
 export const useAppActions = () => useAppStore((state) => state.actions);
-
-export default useAppStore;
