@@ -39,6 +39,8 @@ export const useApi = () => {
       getMessages: (chatRoomId: string) => callWithToken(api.getMessages, chatRoomId),
       postMessage: (chatRoomId: string, message: string) => callWithToken(api.postMessage, chatRoomId, message),
       getDocumentStatus: (documentId: string) => callWithToken(api.getDocumentStatus, documentId), // <-- ADD THIS LINE
+      startPodcastGeneration: (documentId: string) => callWithToken(api.startPodcastGeneration, documentId), // <-- ADD
+      getPodcastStatus: (documentId: string) => callWithToken(api.getPodcastStatus, documentId),
     };
   }, [getToken]);
 

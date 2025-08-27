@@ -27,7 +27,7 @@ export default function RootLayout({
         <body className={`${firaCode.variable} antialiased`}>
           <SignedOut>
             <div className="flex justify-center items-center h-screen">
-              <SignUp />
+              <SignUp routing="hash" />
             </div>
           </SignedOut>
           <SignedIn>{children}</SignedIn>

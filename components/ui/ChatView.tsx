@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Send, Loader2, User, Bot } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useMessages, useIsLoadingMessages, useIsSendingMessage, useAppActions } from '@/lib/store';
+import { useMessages, useIsLoadingMessages, useIsSendingMessage, useAppActions, useChatRooms, useActiveChatRoomId } from '@/lib/store';
+import { PodcastControl } from './PodcastControl';
 
 interface ChatViewProps {
   chatRoomId: string;
@@ -16,25 +17,26 @@ interface ChatViewProps {
 const ChatView = ({ chatRoomId }: ChatViewProps) => {
   const [newMessage, setNewMessage] = useState('');
   const api = useApi();
-  const { postMessage } = useAppActions();
+  const actions = useAppActions();
   const messages = useMessages();
   const isLoading = useIsLoadingMessages();
-  const isSending = useIsSendingMessage();
+  const isAnswering = useIsSendingMessage();
   const scrollRef = useRef<HTMLDivElement>(null);
+  
+  // Find the current chat room title
+  const chatRooms = useChatRooms();
+  const activeChatRoomId = useActiveChatRoomId();
+  const currentChat = chatRooms.find(room => room._id === activeChatRoomId);
 
-  // Effect to scroll to the bottom when new messages are added
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Handle submitting the form
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || isSending) return;
-    
-    // Call the action from the store
-    postMessage(chatRoomId, newMessage, api);
-    setNewMessage(''); // Clear the input immediately
+    if (!newMessage.trim() || isAnswering) return;
+    actions.postMessage(chatRoomId, newMessage, api);
+    setNewMessage('');
   };
 
   if (isLoading) {
@@ -47,7 +49,13 @@ const ChatView = ({ chatRoomId }: ChatViewProps) => {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Messages Area */}
+      <header className="flex items-center justify-between p-4 border-b border-border flex-shrink-0">
+        <h2 className="text-lg font-semibold truncate pr-4" title={currentChat?.title}>
+          {currentChat?.title || 'Chat'}
+        </h2>
+        <PodcastControl />
+      </header>
+
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
         {messages.map((msg) => (
           <div
@@ -78,7 +86,7 @@ const ChatView = ({ chatRoomId }: ChatViewProps) => {
             )}
           </div>
         ))}
-        {isSending && (
+        {isAnswering && (
              <div className="flex items-start gap-4">
                  <div className="flex-shrink-0 h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center">
                      <Loader2 className="h-5 w-5 text-primary animate-spin" />
@@ -91,7 +99,6 @@ const ChatView = ({ chatRoomId }: ChatViewProps) => {
         <div ref={scrollRef} />
       </div>
 
-      {/* Message Composer */}
       <div className="p-4 border-t border-border">
         <form onSubmit={handleSubmit} className="flex items-center gap-2">
           <Input
@@ -99,9 +106,9 @@ const ChatView = ({ chatRoomId }: ChatViewProps) => {
             onChange={(e) => setNewMessage(e.target.value)}
             placeholder="Ask a question about your document..."
             className="flex-1"
-            disabled={isSending}
+            disabled={isAnswering}
           />
-          <Button type="submit" size="icon" disabled={!newMessage.trim() || isSending}>
+          <Button type="submit" size="icon" disabled={!newMessage.trim() || isAnswering}>
             <Send className="h-4 w-4" />
           </Button>
         </form>

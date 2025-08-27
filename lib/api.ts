@@ -58,6 +58,19 @@ export const postMessage = async (token: string, chatRoomId: string, message: st
   return response.data;
 };
 
+export const startPodcastGeneration = async (token: string, documentId: string): Promise<void> => {
+  await apiClient.post(`/documents/${documentId}/podcast`, {}, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+};
+
+export const getPodcastStatus = async (token: string, documentId: string): Promise<{ status: string, url: string | null }> => {
+  const response = await apiClient.get(`/documents/${documentId}/podcast/status`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return response.data;
+};
+
 // --- NEW FUNCTION ---
 export const getDocumentStatus = async (token: string, documentId: string): Promise<{ status: string }> => {
   const response = await apiClient.get(`/documents/${documentId}/status`, {

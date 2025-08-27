@@ -6,14 +6,14 @@ import { useDropzone } from 'react-dropzone';
 import { UploadCloud, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
 import { useApi } from '@/hooks/use-api';
 // --- CORRECTED IMPORT ---
-import { useAppStore, useAppActions, AppState } from '@/lib/store';
+import { useUploadStatus, useAppActions } from '@/lib/store';
 import { cn } from '@/lib/utils';
 
 const FileUpload = () => {
   const api = useApi();
   const { uploadAndTrackDocument } = useAppActions();
   // --- ADDED TYPE ANNOTATION ---
-  const uploadStatus = useAppStore((state: AppState) => state.uploadStatus);
+const uploadStatus = useUploadStatus();
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
@@ -75,7 +75,7 @@ const FileUpload = () => {
     <div 
       {...getRootProps()}
       className={cn(
-        "flex flex-col items-center justify-center h-full border-2 border-dashed border-border rounded-xl p-8 text-center transition-colors",
+        "flex flex-col items-center justify-center h-1/3 border-2 border-dashed border-border rounded-xl p-8 text-center transition-colors",
         isDragActive ? "border-primary bg-primary/10" : "bg-card/50 hover:bg-card/80",
         (uploadStatus !== 'idle') && "cursor-default pointer-events-none"
       )}
